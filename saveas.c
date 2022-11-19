@@ -31,9 +31,46 @@
 #include <xkbcommon/xkbcommon-keysyms.h>
 #include "fo.c"
 
-#define WINDOW_WIDTH 400
-#define WINDOW_HEIGHT 150
 #define UNUSED __attribute__((unused))
+
+#define WINDOW_WIDTH                (400)
+#define WINDOW_HEIGHT               (150)
+
+#define LBL_TITLE_TEXT              ("saveas")
+#define LBL_FOR_TEXTBOX_TEXT        ("filename")
+#define BTN_CANCEL_TEXT             ("cancel")
+#define BTN_SAVE_TEXT               ("save")
+#define TEXTBOX_CONTENT_TEXT        (textbox_text)
+
+#define LBL_TITLE_WIDTH             (7 * (sizeof(LBL_TITLE_TEXT) - 1))
+#define LBL_FOR_TEXTBOX_WIDTH       (7 * (sizeof(LBL_FOR_TEXTBOX_TEXT) - 1))
+#define TEXTBOX_WIDTH               (WINDOW_WIDTH - 60 - LBL_FOR_TEXTBOX_WIDTH - 10)
+#define TEXTBOX_CONTENT_TEXT_WIDTH  (TEXTBOX_WIDTH - 10)
+#define BTN_CANCEL_WIDTH            (7 * (sizeof(BTN_CANCEL_TEXT) - 1))
+#define BTN_SAVE_WIDTH              (7 * (sizeof(BTN_SAVE_TEXT) - 1))
+
+#define LBL_TITLE_HEIGHT            (7)
+#define LBL_FOR_TEXTBOX_HEIGHT      (7)
+#define TEXTBOX_HEIGHT              (16)
+#define TEXTBOX_CONTENT_TEXT_HEIGHT (7)
+#define BTN_CANCEL_HEIGHT           (20)
+#define BTN_SAVE_HEIGHT             (20)
+
+#define LBL_TITLE_X                 ((WINDOW_WIDTH - LBL_TITLE_WIDTH) / 2)
+#define LBL_FOR_TEXTBOX_X           (30)
+#define TEXTBOX_X                   (LBL_FOR_TEXTBOX_X + LBL_FOR_TEXTBOX_WIDTH + 10)
+#define TEXTBOX_CONTENT_TEXT_X      (TEXTBOX_X + 5)
+#define BTN_CANCEL_X                (WINDOW_WIDTH - BTN_CANCEL_WIDTH - 30)
+#define BTN_SAVE_X                  (BTN_CANCEL_X - BTN_SAVE_WIDTH - 30)
+
+#define LBL_TITLE_Y                 (20)
+#define TEXTBOX_Y                   (WINDOW_HEIGHT - BTN_CANCEL_HEIGHT - 30 - TEXTBOX_HEIGHT - 15)
+#define TEXTBOX_CONTENT_TEXT_Y      (TEXTBOX_Y + (TEXTBOX_HEIGHT - TEXTBOX_CONTENT_TEXT_HEIGHT) / 2)
+#define LBL_FOR_TEXTBOX_Y           (TEXTBOX_Y + (TEXTBOX_HEIGHT - LBL_FOR_TEXTBOX_HEIGHT) / 2)
+#define BTN_CANCEL_Y                (WINDOW_HEIGHT - 30)
+#define BTN_SAVE_Y                  (WINDOW_HEIGHT - 30)
+
+#define TEXTBOX_COLOR               (textbox_focus ? 0x3bd97a : 0xffffff)
 
 static xcb_connection_t *conn;
 static xcb_screen_t *screen;
@@ -43,10 +80,6 @@ static xcb_image_t *image;
 static xcb_key_symbols_t *ksyms;
 static xcb_cursor_context_t *cctx;
 static xcb_cursor_t chand, carrow, cxterm, ccurrent;
-static int32_t btnsave_x, btnsave_y, btnsave_width, btnsave_height;
-static int32_t btncancel_x, btncancel_y, btncancel_width, btncancel_height;
-static int32_t textbox_x, textbox_y, textbox_width, textbox_height;
-static int32_t lblfilename_x, lblfilename_y, lblfilename_width, lblfilename_height;
 static int textbox_focus;
 static int textbox_length;
 static size_t textbox_max_len;
@@ -239,34 +272,14 @@ destroy_window(void)
 static void
 draw(void)
 {
-	int32_t title_x, title_y, title_width, title_height;
-
 	memset(wpx, 30, sizeof(uint32_t) * WINDOW_WIDTH * WINDOW_HEIGHT);
 
-	title_width = 7 * strlen("saveas");
-	lblfilename_width = 7 * strlen("filename");
-	textbox_width = WINDOW_WIDTH - 60 - lblfilename_width - 10;
-	btnsave_width = 7 * strlen("save");
-	btncancel_width = 7 * strlen("cancel");
-	lblfilename_height = textbox_height = 16; 
-	title_height = btnsave_height = btncancel_height = 20;
-
-	title_x = (WINDOW_WIDTH - title_width) / 2;
-	lblfilename_x = 30;
-	textbox_x = lblfilename_x + lblfilename_width + 10;
-	btnsave_x = WINDOW_WIDTH - btncancel_width - 30 - btnsave_width - 30;
-	btncancel_x = WINDOW_WIDTH - btncancel_width - 30;
-	title_y = 20;
-	textbox_y = WINDOW_HEIGHT - btncancel_height - 30 - textbox_height - 15;
-	lblfilename_y = textbox_y + (16-7)/2;
-	btnsave_y = btncancel_y = WINDOW_HEIGHT - 30;
-
-	render_text("saveas", 0xffffff, title_x, title_y, title_width, title_height);
-	render_text("filename", textbox_focus ? 0x3bd97a : 0xffffff, lblfilename_x, lblfilename_y, lblfilename_width, lblfilename_height);
-	render_text(textbox_text, textbox_focus ? 0x3bd97a : 0xffffff, textbox_x + 5, textbox_y + (16-7)/2, textbox_width - 10, 20);
-	render_rect(textbox_focus ? 0x3bd97a : 0xffffff, textbox_x, textbox_y, textbox_width, textbox_height);
-	render_text("save", 0xffffff, btnsave_x, btnsave_y, btnsave_width, btnsave_height);
-	render_text("cancel", 0xffffff, btncancel_x, btncancel_y, btncancel_width, btncancel_height);
+	render_text(LBL_TITLE_TEXT, 0xffffff, LBL_TITLE_X, LBL_TITLE_Y, LBL_TITLE_WIDTH, LBL_TITLE_HEIGHT);
+	render_text(LBL_FOR_TEXTBOX_TEXT, TEXTBOX_COLOR, LBL_FOR_TEXTBOX_X, LBL_FOR_TEXTBOX_Y, LBL_FOR_TEXTBOX_WIDTH, LBL_FOR_TEXTBOX_HEIGHT);
+	render_text(TEXTBOX_CONTENT_TEXT, TEXTBOX_COLOR, TEXTBOX_CONTENT_TEXT_X, TEXTBOX_CONTENT_TEXT_Y, TEXTBOX_CONTENT_TEXT_WIDTH, TEXTBOX_CONTENT_TEXT_HEIGHT);
+	render_rect(TEXTBOX_COLOR, TEXTBOX_X, TEXTBOX_Y, TEXTBOX_WIDTH, TEXTBOX_HEIGHT);
+	render_text(BTN_SAVE_TEXT, 0xffffff, BTN_SAVE_X, BTN_SAVE_Y, BTN_SAVE_WIDTH, BTN_SAVE_HEIGHT);
+	render_text(BTN_CANCEL_TEXT, 0xffffff, BTN_CANCEL_X, BTN_CANCEL_Y, BTN_CANCEL_WIDTH, BTN_CANCEL_HEIGHT);
 }
 
 static void
@@ -368,15 +381,15 @@ static void
 h_button_press(xcb_button_press_event_t *ev)
 {
 	if (ev->detail == XCB_BUTTON_INDEX_1) {
-		if (rect_contains_point(textbox_x, textbox_y, textbox_width, textbox_height, ev->event_x, ev->event_y))
+		if (rect_contains_point(TEXTBOX_X, TEXTBOX_Y, TEXTBOX_WIDTH, TEXTBOX_HEIGHT, ev->event_x, ev->event_y))
 			textbox_focus = 1;
 		else {
 			textbox_focus = 0;
-			if (rect_contains_point(btnsave_x, btnsave_y, btnsave_width, btnsave_height, ev->event_x, ev->event_y)) {
+			if (rect_contains_point(BTN_SAVE_X, BTN_SAVE_Y, BTN_SAVE_WIDTH, BTN_SAVE_HEIGHT, ev->event_x, ev->event_y)) {
 				running = 0;
 			}
 
-			if (rect_contains_point(btncancel_x, btncancel_y, btncancel_width, btncancel_height, ev->event_x, ev->event_y)) {
+			if (rect_contains_point(BTN_CANCEL_X, BTN_CANCEL_Y, BTN_CANCEL_WIDTH, BTN_CANCEL_HEIGHT, ev->event_x, ev->event_y)) {
 				running = 0;
 				status = 1;
 			}
@@ -394,11 +407,11 @@ h_motion_notify(xcb_motion_notify_event_t *ev)
 
 	next_cursor = carrow;
 
-	if (rect_contains_point(btnsave_x, btnsave_y, btnsave_width, btnsave_height, ev->event_x, ev->event_y)
-			|| rect_contains_point(btncancel_x, btncancel_y, btncancel_width, btncancel_height, ev->event_x, ev->event_y))
+	if (rect_contains_point(BTN_SAVE_X, BTN_SAVE_Y, BTN_SAVE_WIDTH, BTN_SAVE_HEIGHT, ev->event_x, ev->event_y)
+			|| rect_contains_point(BTN_CANCEL_X, BTN_CANCEL_Y, BTN_CANCEL_WIDTH, BTN_CANCEL_HEIGHT, ev->event_x, ev->event_y))
 		next_cursor = chand;
 
-	if (rect_contains_point(textbox_x, textbox_y, textbox_width, textbox_height, ev->event_x, ev->event_y))
+	if (rect_contains_point(TEXTBOX_X, TEXTBOX_Y, TEXTBOX_WIDTH, TEXTBOX_HEIGHT, ev->event_x, ev->event_y))
 		next_cursor = cxterm;
 
 	if (next_cursor != ccurrent) {
