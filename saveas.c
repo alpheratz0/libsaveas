@@ -205,7 +205,6 @@ create_window(void)
 			.event_mask = XCB_EVENT_MASK_EXPOSURE |
 			              XCB_EVENT_MASK_KEY_PRESS |
 			              XCB_EVENT_MASK_BUTTON_PRESS |
-			              XCB_EVENT_MASK_BUTTON_RELEASE |
 			              XCB_EVENT_MASK_POINTER_MOTION |
 			              XCB_EVENT_MASK_STRUCTURE_NOTIFY
 		}}
@@ -422,17 +421,6 @@ h_motion_notify(xcb_motion_notify_event_t *ev)
 }
 
 static void
-h_button_release(xcb_button_release_event_t *ev)
-{
-	switch (ev->detail) {
-		case XCB_BUTTON_INDEX_1:
-			break;
-		case XCB_BUTTON_INDEX_2:
-			break;
-	}
-}
-
-static void
 h_mapping_notify(xcb_mapping_notify_event_t *ev)
 {
 	if (ev->count > 0)
@@ -459,7 +447,6 @@ saveas_show_popup(char *path, size_t max_len)
 			case XCB_KEY_PRESS:          h_key_press((void *)(ev)); break;
 			case XCB_BUTTON_PRESS:       h_button_press((void *)(ev)); break;
 			case XCB_MOTION_NOTIFY:      h_motion_notify((void *)(ev)); break;
-			case XCB_BUTTON_RELEASE:     h_button_release((void *)(ev)); break;
 			case XCB_MAPPING_NOTIFY:     h_mapping_notify((void *)(ev)); break;
 		}
 
