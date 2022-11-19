@@ -33,45 +33,99 @@
 
 #define UNUSED __attribute__((unused))
 
-#define WINDOW_WIDTH                (400)
-#define WINDOW_HEIGHT               (150)
+#define WIDTH                (400)
+#define HEIGHT               (130)
 
-#define LBL_TITLE_TEXT              ("save as...")
-#define LBL_FOR_TEXTBOX_TEXT        ("filename")
-#define BTN_CANCEL_TEXT             ("cancel")
-#define BTN_SAVE_TEXT               ("save")
-#define TEXTBOX_CONTENT_TEXT        (textbox_text)
+enum {
+	TITLE_LABEL,
+	LAST_LABEL
+};
 
-#define LBL_TITLE_WIDTH             (7 * (sizeof(LBL_TITLE_TEXT) - 1))
-#define LBL_FOR_TEXTBOX_WIDTH       (7 * (sizeof(LBL_FOR_TEXTBOX_TEXT) - 1))
-#define TEXTBOX_WIDTH               (WINDOW_WIDTH - 60 - LBL_FOR_TEXTBOX_WIDTH - 10)
-#define TEXTBOX_CONTENT_TEXT_WIDTH  (TEXTBOX_WIDTH - 10)
-#define BTN_CANCEL_WIDTH            (7 * (sizeof(BTN_CANCEL_TEXT) - 1))
-#define BTN_SAVE_WIDTH              (7 * (sizeof(BTN_SAVE_TEXT) - 1))
+enum {
+	OK_BUTTON,
+	CANCEL_BUTTON,
+	LAST_BUTTON
+};
 
-#define LBL_TITLE_HEIGHT            (7)
-#define LBL_FOR_TEXTBOX_HEIGHT      (7)
-#define TEXTBOX_HEIGHT              (16)
-#define TEXTBOX_CONTENT_TEXT_HEIGHT (7)
-#define BTN_CANCEL_HEIGHT           (20)
-#define BTN_SAVE_HEIGHT             (20)
+struct label {
+	int x;
+	int y;
+	int width;
+	int height;
+	const char *text;
+	uint32_t color;
+};
 
-#define LBL_TITLE_X                 ((WINDOW_WIDTH - LBL_TITLE_WIDTH) / 2)
-#define LBL_FOR_TEXTBOX_X           (30)
-#define TEXTBOX_X                   (LBL_FOR_TEXTBOX_X + LBL_FOR_TEXTBOX_WIDTH + 10)
-#define TEXTBOX_CONTENT_TEXT_X      (TEXTBOX_X + 5)
-#define BTN_CANCEL_X                (WINDOW_WIDTH - BTN_CANCEL_WIDTH - 30)
-#define BTN_SAVE_X                  (BTN_CANCEL_X - BTN_SAVE_WIDTH - 30)
+struct button {
+	int x;
+	int y;
+	int width;
+	int height;
+	const char *text;
+	void (*action)(void);
+	uint32_t color;
+};
 
-#define LBL_TITLE_Y                 (20)
-#define TEXTBOX_Y                   (WINDOW_HEIGHT - BTN_CANCEL_HEIGHT - 30 - TEXTBOX_HEIGHT - 15)
-#define TEXTBOX_CONTENT_TEXT_Y      (TEXTBOX_Y + (TEXTBOX_HEIGHT - TEXTBOX_CONTENT_TEXT_HEIGHT) / 2)
-#define LBL_FOR_TEXTBOX_Y           (TEXTBOX_Y + (TEXTBOX_HEIGHT - LBL_FOR_TEXTBOX_HEIGHT) / 2)
-#define BTN_CANCEL_Y                (WINDOW_HEIGHT - 30)
-#define BTN_SAVE_Y                  (WINDOW_HEIGHT - 30)
+struct textbox {
+	int x;
+	int y;
+	int width;
+	int height;
+	int focused;
+	char *text;
+	size_t len;
+	size_t capacity;
+	uint32_t color;
+	uint32_t focused_color;
+};
 
-#define TEXTBOX_COLOR               (0xffffff)
-#define TEXTBOX_BORDER_COLOR        (textbox_focus ? 0x3f5df2 : 0xffffff)
+static void ok_button_cb(void);
+static void cancel_button_cb(void);
+
+struct label labels[] = {
+	[TITLE_LABEL] = {
+		.x = 30,
+		.y = 30,
+		.width = 154,
+		.height = 7,
+		.text = "enter a filename below",
+		.color = 0xffffff
+	}
+};
+
+struct button buttons[] = {
+	[OK_BUTTON] = {
+		.x = 290,
+		.y = 93,
+		.width = 28,
+		.height = 7,
+		.text = "save",
+		.color = 0xffffff,
+		.action = ok_button_cb
+	},
+	[CANCEL_BUTTON] = {
+		.x = 328,
+		.y = 93,
+		.width = 42,
+		.height = 7,
+		.text = "cancel",
+		.color = 0xffffff,
+		.action = cancel_button_cb
+	},
+};
+
+struct textbox textbox = {
+	.x = 30,
+	.y = 57,
+	.width = 340,
+	.height = 16,
+	.len = 0,
+	.capacity = 0,
+	.text = NULL,
+	.focused = 0,
+	.focused_color = 0xc7ff66,
+	.color = 0xffffff
+};
 
 static xcb_connection_t *conn;
 static xcb_screen_t *screen;
@@ -81,10 +135,6 @@ static xcb_image_t *image;
 static xcb_key_symbols_t *ksyms;
 static xcb_cursor_context_t *cctx;
 static xcb_cursor_t chand, carrow, cxterm, ccurrent;
-static int textbox_focus;
-static int textbox_length;
-static size_t textbox_max_len;
-char *textbox_text;
 static uint32_t *wpx;
 static int running, status;
 
@@ -128,9 +178,9 @@ render_text(const char *text, uint32_t color, uint32_t x, uint32_t y, uint32_t a
 			glyph = five_by_seven + *p*7;
 			for (gy = 0; gy < 7; ++gy)
 				for (gx = 0; gx < 5; ++gx)
-					if (glyph[gy] & (1 << (4 - gx)) && cy+gy < WINDOW_HEIGHT && cy+gy-y < area_height
-							&& cx+gx < WINDOW_WIDTH && cx+gx-x < area_width)
-						wpx[(cy+gy)*WINDOW_WIDTH+cx+gx] = color;
+					if (glyph[gy] & (1 << (4 - gx)) && cy+gy < HEIGHT && cy+gy-y < area_height
+							&& cx+gx < WIDTH && cx+gx-x < area_width)
+						wpx[(cy+gy)*WIDTH+cx+gx] = color;
 			cx += 7;
 		}
 
@@ -144,10 +194,10 @@ render_rect(uint32_t color, int x, int y, int width, int height)
 	int cx, cy;
 
 	for (cx = x; cx < (x+width); ++cx)
-		wpx[y*WINDOW_WIDTH+cx] = wpx[(y+height)*WINDOW_WIDTH+cx] = color;
+		wpx[y*WIDTH+cx] = wpx[(y+height)*WIDTH+cx] = color;
 
 	for (cy = y; cy < (y+height+1); ++cy)
-		wpx[cy*WINDOW_WIDTH+x] = wpx[cy*WINDOW_WIDTH+x+width] = color;
+		wpx[cy*WIDTH+x] = wpx[cy*WIDTH+x+width] = color;
 }
 
 static xcb_atom_t
@@ -191,7 +241,7 @@ create_window(void)
 	cxterm = xcb_cursor_load_cursor(cctx, "xterm");
 	ccurrent = carrow;
 
-	if (NULL == (wpx = calloc(WINDOW_WIDTH * WINDOW_HEIGHT, sizeof(uint32_t))))
+	if (NULL == (wpx = calloc(WIDTH * HEIGHT, sizeof(uint32_t))))
 		die("error while calling malloc, no memory available");
 
 	ksyms = xcb_key_symbols_alloc(conn);
@@ -200,7 +250,7 @@ create_window(void)
 
 	xcb_create_window_aux(
 		conn, screen->root_depth, window, screen->root, 0, 0,
-		WINDOW_WIDTH, WINDOW_HEIGHT, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT,
+		WIDTH, HEIGHT, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT,
 		screen->root_visual, XCB_CW_EVENT_MASK,
 		(const xcb_create_window_value_list_t []) {{
 			.event_mask = XCB_EVENT_MASK_EXPOSURE |
@@ -213,13 +263,13 @@ create_window(void)
 
 	xcb_create_gc(conn, gc, window, 0, NULL);
 
-    xcb_icccm_size_hints_set_min_size(&size_hints, WINDOW_WIDTH, WINDOW_HEIGHT);
-    xcb_icccm_size_hints_set_max_size(&size_hints, WINDOW_WIDTH, WINDOW_HEIGHT);
+    xcb_icccm_size_hints_set_min_size(&size_hints, WIDTH, HEIGHT);
+    xcb_icccm_size_hints_set_max_size(&size_hints, WIDTH, HEIGHT);
     xcb_icccm_set_wm_size_hints(conn, window, XCB_ATOM_WM_NORMAL_HINTS, &size_hints);
 
 	image = xcb_image_create_native(
-		conn, WINDOW_WIDTH, WINDOW_HEIGHT, XCB_IMAGE_FORMAT_Z_PIXMAP, screen->root_depth,
-		wpx, sizeof(uint32_t) * WINDOW_WIDTH * WINDOW_HEIGHT, (uint8_t *)(wpx)
+		conn, WIDTH, HEIGHT, XCB_IMAGE_FORMAT_Z_PIXMAP, screen->root_depth,
+		wpx, sizeof(uint32_t) * WIDTH * HEIGHT, (uint8_t *)(wpx)
 	);
 
 	xcb_change_property(
@@ -270,16 +320,38 @@ destroy_window(void)
 }
 
 static void
+render_label(struct label *label)
+{
+	render_text(label->text, label->color, label->x, label->y, label->width, label->height);
+}
+
+static void
+render_button(struct button *button)
+{
+	render_text(button->text, button->color, button->x, button->y, button->width, button->height);
+}
+
+static void
+render_textbox(struct textbox *tb)
+{
+	render_text(tb->text, tb->color, tb->x + 5, tb->y + (tb->height - 7) / 2, tb->width - 10, tb->height);
+	render_rect(tb->focused ? tb->focused_color : tb->color, tb->x, tb->y, tb->width, tb->height);
+}
+
+static void
 draw(void)
 {
-	memset(wpx, 30, sizeof(uint32_t) * WINDOW_WIDTH * WINDOW_HEIGHT);
+	size_t i;
 
-	render_text(LBL_TITLE_TEXT, TEXTBOX_COLOR, LBL_TITLE_X, LBL_TITLE_Y, LBL_TITLE_WIDTH, LBL_TITLE_HEIGHT);
-	render_text(LBL_FOR_TEXTBOX_TEXT, TEXTBOX_COLOR, LBL_FOR_TEXTBOX_X, LBL_FOR_TEXTBOX_Y, LBL_FOR_TEXTBOX_WIDTH, LBL_FOR_TEXTBOX_HEIGHT);
-	render_text(TEXTBOX_CONTENT_TEXT, TEXTBOX_COLOR, TEXTBOX_CONTENT_TEXT_X, TEXTBOX_CONTENT_TEXT_Y, TEXTBOX_CONTENT_TEXT_WIDTH, TEXTBOX_CONTENT_TEXT_HEIGHT);
-	render_rect(TEXTBOX_BORDER_COLOR, TEXTBOX_X, TEXTBOX_Y, TEXTBOX_WIDTH, TEXTBOX_HEIGHT);
-	render_text(BTN_SAVE_TEXT, TEXTBOX_COLOR, BTN_SAVE_X, BTN_SAVE_Y, BTN_SAVE_WIDTH, BTN_SAVE_HEIGHT);
-	render_text(BTN_CANCEL_TEXT, TEXTBOX_COLOR, BTN_CANCEL_X, BTN_CANCEL_Y, BTN_CANCEL_WIDTH, BTN_CANCEL_HEIGHT);
+	memset(wpx, 30, sizeof(uint32_t) * WIDTH * HEIGHT);
+
+	for (i = 0; i < LAST_LABEL; ++i)
+		render_label(&labels[i]);
+
+	for (i = 0; i < LAST_BUTTON; ++i)
+		render_button(&buttons[i]);
+
+	render_textbox(&textbox);
 }
 
 static void
@@ -340,8 +412,8 @@ h_key_press(xcb_key_press_event_t *ev)
 	key = xcb_key_symbols_get_keysym(ksyms, ev->detail, ev->state);
 
 	if (key == XKB_KEY_Escape) {
-		if (textbox_focus) {
-			textbox_focus = 0;
+		if (textbox.focused) {
+			textbox.focused = 0;
 			draw();
 			swap_buffers();
 		}
@@ -350,26 +422,26 @@ h_key_press(xcb_key_press_event_t *ev)
 			status = 1;
 		}
 	} else if (key == XKB_KEY_Tab) {
-		textbox_focus = !textbox_focus;
+		textbox.focused = !textbox.focused;
 		draw();
 		swap_buffers();
 	} else if (key == XKB_KEY_BackSpace) {
-		if (textbox_length > 0) {
-			textbox_length -= 1;
-			textbox_text[textbox_length] = '\0';
+		if (textbox.len > 0) {
+			textbox.len -= 1;
+			textbox.text[textbox.len] = '\0';
 			draw();
 			swap_buffers();
 		}
 	} else if (key == XKB_KEY_Return) {
-		if (textbox_focus) {
+		if (textbox.focused) {
 			running = 0;
 		}
 	} else {
-		if (textbox_focus) {
+		if (textbox.focused) {
 			c = get_char_from_keysym(key);
-			if (c != '\0' && textbox_length < (int)textbox_max_len - 2) {
-				textbox_text[textbox_length++] = c;
-				textbox_text[textbox_length] = '\0';
+			if (c != '\0' && textbox.len < textbox.capacity - 2) {
+				textbox.text[textbox.len++] = c;
+				textbox.text[textbox.len] = '\0';
 			}
 			draw();
 			swap_buffers();
@@ -380,20 +452,15 @@ h_key_press(xcb_key_press_event_t *ev)
 static void
 h_button_press(xcb_button_press_event_t *ev)
 {
-	if (ev->detail == XCB_BUTTON_INDEX_1) {
-		if (rect_contains_point(TEXTBOX_X, TEXTBOX_Y, TEXTBOX_WIDTH, TEXTBOX_HEIGHT, ev->event_x, ev->event_y))
-			textbox_focus = 1;
-		else {
-			textbox_focus = 0;
-			if (rect_contains_point(BTN_SAVE_X, BTN_SAVE_Y, BTN_SAVE_WIDTH, BTN_SAVE_HEIGHT, ev->event_x, ev->event_y)) {
-				running = 0;
-			}
+	size_t i;
 
-			if (rect_contains_point(BTN_CANCEL_X, BTN_CANCEL_Y, BTN_CANCEL_WIDTH, BTN_CANCEL_HEIGHT, ev->event_x, ev->event_y)) {
-				running = 0;
-				status = 1;
-			}
-		}
+	if (ev->detail == XCB_BUTTON_INDEX_1) {
+		for (i = 0; i < LAST_BUTTON; ++i)
+			if (rect_contains_point(buttons[i].x, buttons[i].y, buttons[i].width, buttons[i].height, ev->event_x, ev->event_y))
+				if (buttons[i].action)
+					buttons[i].action();
+
+		textbox.focused = rect_contains_point(textbox.x, textbox.y, textbox.width, textbox.height, ev->event_x, ev->event_y);
 	}
 
 	draw();
@@ -403,22 +470,24 @@ h_button_press(xcb_button_press_event_t *ev)
 static void
 h_motion_notify(xcb_motion_notify_event_t *ev)
 {
+	size_t i;
 	xcb_cursor_t next_cursor;
 
 	next_cursor = carrow;
 
-	if (rect_contains_point(BTN_SAVE_X, BTN_SAVE_Y, BTN_SAVE_WIDTH, BTN_SAVE_HEIGHT, ev->event_x, ev->event_y)
-			|| rect_contains_point(BTN_CANCEL_X, BTN_CANCEL_Y, BTN_CANCEL_WIDTH, BTN_CANCEL_HEIGHT, ev->event_x, ev->event_y))
-		next_cursor = chand;
+	for (i = 0; i < LAST_BUTTON; ++i)
+		if (rect_contains_point(buttons[i].x, buttons[i].y, buttons[i].width, buttons[i].height, ev->event_x, ev->event_y))
+			next_cursor = chand;
 
-	if (rect_contains_point(TEXTBOX_X, TEXTBOX_Y, TEXTBOX_WIDTH, TEXTBOX_HEIGHT, ev->event_x, ev->event_y))
+	if (rect_contains_point(textbox.x, textbox.y, textbox.width, textbox.height, ev->event_x, ev->event_y))
 		next_cursor = cxterm;
 
-	if (next_cursor != ccurrent) {
-		xcb_change_window_attributes(conn, window, XCB_CW_CURSOR, &next_cursor);
-		xcb_flush(conn);
-		ccurrent = next_cursor;
-	}
+	if (next_cursor == ccurrent)
+		return;
+
+	xcb_change_window_attributes(conn, window, XCB_CW_CURSOR, &next_cursor);
+	xcb_flush(conn);
+	ccurrent = next_cursor;
 }
 
 static void
@@ -428,15 +497,29 @@ h_mapping_notify(xcb_mapping_notify_event_t *ev)
 		xcb_refresh_keyboard_mapping(ksyms, ev);
 }
 
+static void
+ok_button_cb(void)
+{
+	running = 0;
+}
+
+static void
+cancel_button_cb(void)
+{
+	running = 0;
+	status = 1;
+}
+
 extern int
 saveas_show_popup(char *path, size_t max_len)
 {
 	xcb_generic_event_t *ev;
 
-	textbox_text = path;
-	textbox_max_len = max_len;
-	textbox_length = 0;
-	textbox_focus = 0;
+	textbox.capacity = max_len;
+	textbox.focused = 0;
+	textbox.text = path;
+	textbox.len = 0;
+
 	status = 0;
 
 	create_window();
