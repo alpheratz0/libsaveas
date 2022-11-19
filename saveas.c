@@ -15,14 +15,12 @@
 
 */
 
-#include <png.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdarg.h>
 #include <string.h>
-#include <setjmp.h>
 #include <xcb/xcb.h>
 #include <xcb/xcb_cursor.h>
 #include <xcb/xcb_image.h>
