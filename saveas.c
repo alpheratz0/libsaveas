@@ -36,7 +36,7 @@
 #define WINDOW_WIDTH                (400)
 #define WINDOW_HEIGHT               (150)
 
-#define LBL_TITLE_TEXT              ("saveas")
+#define LBL_TITLE_TEXT              ("save as...")
 #define LBL_FOR_TEXTBOX_TEXT        ("filename")
 #define BTN_CANCEL_TEXT             ("cancel")
 #define BTN_SAVE_TEXT               ("save")
