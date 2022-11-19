@@ -36,95 +36,24 @@
 #define WIDTH                (400)
 #define HEIGHT               (130)
 
-enum {
-	TITLE_LABEL,
-	LAST_LABEL
-};
-
-enum {
-	OK_BUTTON,
-	CANCEL_BUTTON,
-	LAST_BUTTON
-};
-
 struct label {
-	int x;
-	int y;
-	int width;
-	int height;
+	int x, y, width, height;
 	const char *text;
 	uint32_t color;
 };
 
 struct button {
-	int x;
-	int y;
-	int width;
-	int height;
+	int x, y, width, height;
 	const char *text;
 	void (*action)(void);
 	uint32_t color;
 };
 
 struct textbox {
-	int x;
-	int y;
-	int width;
-	int height;
-	int focused;
+	int x, y, width, height, focused;
 	char *text;
-	size_t len;
-	size_t capacity;
-	uint32_t color;
-	uint32_t focused_color;
-};
-
-static void ok_button_cb(void);
-static void cancel_button_cb(void);
-
-struct label labels[] = {
-	[TITLE_LABEL] = {
-		.x = 30,
-		.y = 30,
-		.width = 154,
-		.height = 7,
-		.text = "enter a filename below",
-		.color = 0xffffff
-	}
-};
-
-struct button buttons[] = {
-	[OK_BUTTON] = {
-		.x = 290,
-		.y = 93,
-		.width = 28,
-		.height = 7,
-		.text = "save",
-		.color = 0xffffff,
-		.action = ok_button_cb
-	},
-	[CANCEL_BUTTON] = {
-		.x = 328,
-		.y = 93,
-		.width = 42,
-		.height = 7,
-		.text = "cancel",
-		.color = 0xffffff,
-		.action = cancel_button_cb
-	},
-};
-
-struct textbox textbox = {
-	.x = 30,
-	.y = 57,
-	.width = 340,
-	.height = 16,
-	.len = 0,
-	.capacity = 0,
-	.text = NULL,
-	.focused = 0,
-	.focused_color = 0xc7ff66,
-	.color = 0xffffff
+	size_t len, capacity;
+	uint32_t color, focused_color;
 };
 
 static xcb_connection_t *conn;
@@ -137,6 +66,21 @@ static xcb_cursor_context_t *cctx;
 static xcb_cursor_t chand, carrow, cxterm, ccurrent;
 static uint32_t *wpx;
 static int running, status;
+static void ok_button_cb(void);
+static void cancel_button_cb(void);
+
+static struct label labels[] = {
+	{ 30, 30, 154, 7, "enter a filename below", 0xffffff }
+};
+
+static struct button buttons[] = {
+	{ 290, 93, 28, 7, "save",   ok_button_cb,     0xffffff },
+	{ 328, 93, 42, 7, "cancel", cancel_button_cb, 0xffffff },
+};
+
+static struct textbox textbox = {
+	30, 57, 340, 16, 0, NULL, 0, 0, 0xffffff, 0xc7ff66,
+};
 
 static void
 die(const char *fmt, ...)
@@ -151,6 +95,30 @@ die(const char *fmt, ...)
 	exit(1);
 }
 
+static char
+get_char_from_keysym(xcb_keysym_t keysym)
+{
+	if (keysym >= XKB_KEY_a && keysym <= XKB_KEY_z)
+		return 'a' + (keysym - XKB_KEY_a);
+	if (keysym >= XKB_KEY_A && keysym <= XKB_KEY_Z)
+		return 'A' + (keysym - XKB_KEY_A);
+	if (keysym == XKB_KEY_comma)
+		return ',';
+	if (keysym == XKB_KEY_period)
+		return '.';
+	if (keysym == XKB_KEY_minus)
+		return '-';
+	if (keysym == XKB_KEY_underscore)
+		return '_';
+	if (keysym == XKB_KEY_space)
+		return ' ';
+	if (keysym == XKB_KEY_slash)
+		return '/';
+	if (keysym >= XKB_KEY_0 && keysym <= XKB_KEY_9)
+		return '0' + (keysym - XKB_KEY_0);
+	return '\0';
+}
+
 static int
 rect_contains_point(int rx, int ry, int rw, int rh, int x, int y)
 {
@@ -158,7 +126,8 @@ rect_contains_point(int rx, int ry, int rw, int rh, int x, int y)
 }
 
 static void
-render_text(const char *text, uint32_t color, uint32_t x, uint32_t y, uint32_t area_width, uint32_t area_height)
+render_text(const char *text, uint32_t color, uint32_t x, uint32_t y,
+            uint32_t area_width, uint32_t area_height)
 {
 	uint32_t cx, cy, gx, gy;
 	unsigned char *glyph;
@@ -198,6 +167,25 @@ render_rect(uint32_t color, int x, int y, int width, int height)
 
 	for (cy = y; cy < (y+height+1); ++cy)
 		wpx[cy*WIDTH+x] = wpx[cy*WIDTH+x+width] = color;
+}
+
+static void
+render_label(struct label *label)
+{
+	render_text(label->text, label->color, label->x, label->y, label->width, label->height);
+}
+
+static void
+render_button(struct button *button)
+{
+	render_text(button->text, button->color, button->x, button->y, button->width, button->height);
+}
+
+static void
+render_textbox(struct textbox *tb)
+{
+	render_text(tb->text, tb->color, tb->x + 5, tb->y + (tb->height - 7) / 2, tb->width - 10, tb->height);
+	render_rect(tb->focused ? tb->focused_color : tb->color, tb->x, tb->y, tb->width, tb->height);
 }
 
 static xcb_atom_t
@@ -320,35 +308,16 @@ destroy_window(void)
 }
 
 static void
-render_label(struct label *label)
-{
-	render_text(label->text, label->color, label->x, label->y, label->width, label->height);
-}
-
-static void
-render_button(struct button *button)
-{
-	render_text(button->text, button->color, button->x, button->y, button->width, button->height);
-}
-
-static void
-render_textbox(struct textbox *tb)
-{
-	render_text(tb->text, tb->color, tb->x + 5, tb->y + (tb->height - 7) / 2, tb->width - 10, tb->height);
-	render_rect(tb->focused ? tb->focused_color : tb->color, tb->x, tb->y, tb->width, tb->height);
-}
-
-static void
 draw(void)
 {
 	size_t i;
 
 	memset(wpx, 30, sizeof(uint32_t) * WIDTH * HEIGHT);
 
-	for (i = 0; i < LAST_LABEL; ++i)
+	for (i = 0; i < sizeof(labels)/sizeof(labels[0]); ++i)
 		render_label(&labels[i]);
 
-	for (i = 0; i < LAST_BUTTON; ++i)
+	for (i = 0; i < sizeof(buttons)/sizeof(buttons[0]); ++i)
 		render_button(&buttons[i]);
 
 	render_textbox(&textbox);
@@ -377,30 +346,6 @@ h_expose(UNUSED xcb_expose_event_t *ev)
 {
 	draw();
 	xcb_image_put(conn, window, gc, image, 0, 0, 0);
-}
-
-static char
-get_char_from_keysym(xcb_keysym_t keysym)
-{
-	if (keysym >= XKB_KEY_a && keysym <= XKB_KEY_z)
-		return 'a' + (keysym - XKB_KEY_a);
-	if (keysym >= XKB_KEY_A && keysym <= XKB_KEY_Z)
-		return 'A' + (keysym - XKB_KEY_A);
-	if (keysym == XKB_KEY_comma)
-		return ',';
-	if (keysym == XKB_KEY_period)
-		return '.';
-	if (keysym == XKB_KEY_minus)
-		return '-';
-	if (keysym == XKB_KEY_underscore)
-		return '_';
-	if (keysym == XKB_KEY_space)
-		return ' ';
-	if (keysym == XKB_KEY_slash)
-		return '/';
-	if (keysym >= XKB_KEY_0 && keysym <= XKB_KEY_9)
-		return '0' + (keysym - XKB_KEY_0);
-	return '\0';
 }
 
 static void
@@ -455,7 +400,7 @@ h_button_press(xcb_button_press_event_t *ev)
 	size_t i;
 
 	if (ev->detail == XCB_BUTTON_INDEX_1) {
-		for (i = 0; i < LAST_BUTTON; ++i)
+		for (i = 0; i < sizeof(buttons)/sizeof(buttons[0]); ++i)
 			if (rect_contains_point(buttons[i].x, buttons[i].y, buttons[i].width, buttons[i].height, ev->event_x, ev->event_y))
 				if (buttons[i].action)
 					buttons[i].action();
@@ -475,7 +420,7 @@ h_motion_notify(xcb_motion_notify_event_t *ev)
 
 	next_cursor = carrow;
 
-	for (i = 0; i < LAST_BUTTON; ++i)
+	for (i = 0; i < sizeof(buttons)/sizeof(buttons[0]); ++i)
 		if (rect_contains_point(buttons[i].x, buttons[i].y, buttons[i].width, buttons[i].height, ev->event_x, ev->event_y))
 			next_cursor = chand;
 
