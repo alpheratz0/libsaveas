@@ -1,2 +1,3 @@
-wip, it is working rn, but the code needs to be written
-correctly, it is awful atm
+libsaveas is a little library to create a 'save as' popup window for X,
+it's working rn, but it's still in an early stage of development,
+part of the code is a mess, give me some time...
