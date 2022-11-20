@@ -1,4 +1,4 @@
-libsaveas is a little library to create a 'save as' popup window for X,
+libsaveas is a little library to create a 'save as' popup window for X
 
 This library depends on libxcb, libxcb-image, libxcb-cursor,
 libxcb-keysyms, libxcb-icccm and libxcb-xkb.
