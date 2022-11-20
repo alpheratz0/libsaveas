@@ -84,6 +84,60 @@ die(const char *fmt, ...)
 	exit(1);
 }
 
+static void
+ok_button_cb(void)
+{
+	running = 0;
+	status = SAVEAS_STATUS_OK;
+}
+
+static void
+cancel_button_cb(void)
+{
+	running = 0;
+	status = SAVEAS_STATUS_CANCEL;
+}
+
+static void
+reset_state(void)
+{
+	labels[0].x = 30;
+	labels[0].y = 30;
+	labels[0].width = 154;
+	labels[0].height = 7;
+	labels[0].text = "enter a filename below";
+	labels[0].color = 0xffffff;
+
+	buttons[0].x = 290;
+	buttons[0].y = 93;
+	buttons[0].width = 28;
+	buttons[0].height = 7;
+	buttons[0].text = "save";
+	buttons[0].action = ok_button_cb;
+	buttons[0].color = 0xffffff;
+
+	buttons[1].x = 328;
+	buttons[1].y = 93;
+	buttons[1].width = 42;
+	buttons[1].height = 7;
+	buttons[1].text = "cancel";
+	buttons[1].action = cancel_button_cb;
+	buttons[1].color = 0xffffff;
+
+	textbox.x = 30;
+	textbox.y = 57;
+	textbox.width = 340;
+	textbox.height = 16;
+	textbox.focused = 0;
+	memset(textbox.text, 0, sizeof(textbox.text));
+	textbox.capacity = sizeof(textbox.text);
+	textbox.len = 0;
+	textbox.color = 0xffffff;
+	textbox.focused_color = 0xc7ff66;
+
+	status = SAVEAS_STATUS_OK;
+}
+
 static char
 get_char_from_keysym(xcb_keysym_t keysym)
 {
@@ -153,20 +207,25 @@ render_rect(uint32_t color, int x, int y, int width, int height)
 static void
 render_label(struct label *label)
 {
-	render_text(label->text, label->color, label->x, label->y, label->width, label->height);
+	render_text(label->text, label->color, label->x, label->y,
+	            label->width, label->height);
 }
 
 static void
 render_button(struct button *button)
 {
-	render_text(button->text, button->color, button->x, button->y, button->width, button->height);
+	render_text(button->text, button->color, button->x, button->y,
+	            button->width, button->height);
 }
 
 static void
 render_textbox(struct textbox *tb)
 {
-	render_text(tb->text, tb->color, tb->x + 5, tb->y + (tb->height - 7) / 2, tb->width - 10, tb->height);
-	render_rect(tb->focused ? tb->focused_color : tb->color, tb->x, tb->y, tb->width, tb->height);
+	render_text(tb->text, tb->color, tb->x + 5, tb->y + (tb->height - 7) / 2,
+	            tb->width - 10, tb->height);
+
+	render_rect(tb->focused ? tb->focused_color : tb->color, tb->x, tb->y,
+	            tb->width, tb->height);
 }
 
 static xcb_atom_t
@@ -342,8 +401,7 @@ h_key_press(xcb_key_press_event_t *ev)
 			textbox.focused = 0;
 			draw();
 			swap_buffers();
-		}
-		else {
+		} else {
 			running = 0;
 			status = SAVEAS_STATUS_CANCEL;
 		}
@@ -363,16 +421,14 @@ h_key_press(xcb_key_press_event_t *ev)
 			running = 0;
 			status = SAVEAS_STATUS_OK;
 		}
-	} else {
-		if (textbox.focused) {
-			c = get_char_from_keysym(key);
-			if (c != '\0' && textbox.len < textbox.capacity - 2) {
-				textbox.text[textbox.len++] = c;
-				textbox.text[textbox.len] = '\0';
-			}
-			draw();
-			swap_buffers();
+	} else if (textbox.focused) {
+		c = get_char_from_keysym(key);
+		if (c != '\0' && textbox.len < textbox.capacity - 2) {
+			textbox.text[textbox.len++] = c;
+			textbox.text[textbox.len] = '\0';
 		}
+		draw();
+		swap_buffers();
 	}
 }
 
@@ -381,14 +437,20 @@ h_button_press(xcb_button_press_event_t *ev)
 {
 	size_t i;
 
-	if (ev->detail == XCB_BUTTON_INDEX_1) {
-		for (i = 0; i < sizeof(buttons)/sizeof(buttons[0]); ++i)
-			if (rect_contains_point(buttons[i].x, buttons[i].y, buttons[i].width, buttons[i].height, ev->event_x, ev->event_y))
-				if (buttons[i].action)
-					buttons[i].action();
+	if (ev->detail != XCB_BUTTON_INDEX_1)
+		return;
 
-		textbox.focused = rect_contains_point(textbox.x, textbox.y, textbox.width, textbox.height, ev->event_x, ev->event_y);
-	}
+	for (i = 0; i < sizeof(buttons)/sizeof(buttons[0]); ++i)
+		if (rect_contains_point(buttons[i].x, buttons[i].y,
+		                        buttons[i].width, buttons[i].height,
+		                        ev->event_x, ev->event_y)) {
+			if (NULL != buttons[i].action)
+				buttons[i].action();
+		}
+
+	textbox.focused = rect_contains_point(textbox.x, textbox.y,
+	                                      textbox.width, textbox.height,
+	                                      ev->event_x, ev->event_y);
 
 	draw();
 	swap_buffers();
@@ -403,11 +465,17 @@ h_motion_notify(xcb_motion_notify_event_t *ev)
 	next_cursor = carrow;
 
 	for (i = 0; i < sizeof(buttons)/sizeof(buttons[0]); ++i)
-		if (rect_contains_point(buttons[i].x, buttons[i].y, buttons[i].width, buttons[i].height, ev->event_x, ev->event_y))
+		if (rect_contains_point(buttons[i].x, buttons[i].y,
+		                        buttons[i].width, buttons[i].height,
+								ev->event_x, ev->event_y)) {
 			next_cursor = chand;
+		}
 
-	if (rect_contains_point(textbox.x, textbox.y, textbox.width, textbox.height, ev->event_x, ev->event_y))
+	if (rect_contains_point(textbox.x, textbox.y,
+	                        textbox.width, textbox.height,
+							ev->event_x, ev->event_y)) {
 		next_cursor = cxterm;
+	}
 
 	if (next_cursor == ccurrent)
 		return;
@@ -422,60 +490,6 @@ h_mapping_notify(xcb_mapping_notify_event_t *ev)
 {
 	if (ev->count > 0)
 		xcb_refresh_keyboard_mapping(ksyms, ev);
-}
-
-static void
-ok_button_cb(void)
-{
-	running = 0;
-	status = SAVEAS_STATUS_OK;
-}
-
-static void
-cancel_button_cb(void)
-{
-	running = 0;
-	status = SAVEAS_STATUS_CANCEL;
-}
-
-static void
-reset_state(void)
-{
-	labels[0].x = 30;
-	labels[0].y = 30;
-	labels[0].width = 154;
-	labels[0].height = 7;
-	labels[0].text = "enter a filename below";
-	labels[0].color = 0xffffff;
-
-	buttons[0].x = 290;
-	buttons[0].y = 93;
-	buttons[0].width = 28;
-	buttons[0].height = 7;
-	buttons[0].text = "save";
-	buttons[0].action = ok_button_cb;
-	buttons[0].color = 0xffffff;
-
-	buttons[1].x = 328;
-	buttons[1].y = 93;
-	buttons[1].width = 42;
-	buttons[1].height = 7;
-	buttons[1].text = "cancel";
-	buttons[1].action = cancel_button_cb;
-	buttons[1].color = 0xffffff;
-
-	textbox.x = 30;
-	textbox.y = 57;
-	textbox.width = 340;
-	textbox.height = 16;
-	textbox.focused = 0;
-	memset(textbox.text, 0, sizeof(textbox.text));
-	textbox.capacity = sizeof(textbox.text);
-	textbox.len = 0;
-	textbox.color = 0xffffff;
-	textbox.focused_color = 0xc7ff66;
-
-	status = SAVEAS_STATUS_OK;
 }
 
 extern int
