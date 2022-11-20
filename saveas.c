@@ -30,6 +30,7 @@
 #include <xcb/xkb.h>
 #include <xkbcommon/xkbcommon-keysyms.h>
 #include "fo.c"
+#include "saveas.h"
 
 #define UNUSED __attribute__((unused))
 
@@ -51,7 +52,7 @@ struct button {
 
 struct textbox {
 	int x, y, width, height, focused;
-	char *text;
+	char text[255];
 	size_t len, capacity;
 	uint32_t color, focused_color;
 };
@@ -66,21 +67,9 @@ static xcb_cursor_context_t *cctx;
 static xcb_cursor_t chand, carrow, cxterm, ccurrent;
 static uint32_t *wpx;
 static int running, status;
-static void ok_button_cb(void);
-static void cancel_button_cb(void);
-
-static struct label labels[] = {
-	{ 30, 30, 154, 7, "enter a filename below", 0xffffff }
-};
-
-static struct button buttons[] = {
-	{ 290, 93, 28, 7, "save",   ok_button_cb,     0xffffff },
-	{ 328, 93, 42, 7, "cancel", cancel_button_cb, 0xffffff },
-};
-
-static struct textbox textbox = {
-	30, 57, 340, 16, 0, NULL, 0, 0, 0xffffff, 0xc7ff66,
-};
+static struct label labels[1];
+static struct button buttons[2];
+static struct textbox textbox;
 
 static void
 die(const char *fmt, ...)
@@ -337,7 +326,7 @@ h_client_message(xcb_client_message_event_t *ev)
 	/* https://www.x.org/docs/ICCCM/icccm.pdf */
 	if (ev->data.data32[0] == get_atom("WM_DELETE_WINDOW")) {
 		running = 0;
-		status = 1;
+		status = SAVEAS_STATUS_CANCEL;
 	}
 }
 
@@ -364,7 +353,7 @@ h_key_press(xcb_key_press_event_t *ev)
 		}
 		else {
 			running = 0;
-			status = 1;
+			status = SAVEAS_STATUS_CANCEL;
 		}
 	} else if (key == XKB_KEY_Tab) {
 		textbox.focused = !textbox.focused;
@@ -380,6 +369,7 @@ h_key_press(xcb_key_press_event_t *ev)
 	} else if (key == XKB_KEY_Return) {
 		if (textbox.focused) {
 			running = 0;
+			status = SAVEAS_STATUS_OK;
 		}
 	} else {
 		if (textbox.focused) {
@@ -446,27 +436,62 @@ static void
 ok_button_cb(void)
 {
 	running = 0;
+	status = SAVEAS_STATUS_OK;
 }
 
 static void
 cancel_button_cb(void)
 {
 	running = 0;
-	status = 1;
+	status = SAVEAS_STATUS_CANCEL;
+}
+
+static void
+reset_state(void)
+{
+	labels[0].x = 30;
+	labels[0].y = 30;
+	labels[0].width = 154;
+	labels[0].height = 7;
+	labels[0].text = "enter a filename below";
+	labels[0].color = 0xffffff;
+
+	buttons[0].x = 290;
+	buttons[0].y = 93;
+	buttons[0].width = 28;
+	buttons[0].height = 7;
+	buttons[0].text = "save";
+	buttons[0].action = ok_button_cb;
+	buttons[0].color = 0xffffff;
+
+	buttons[1].x = 328;
+	buttons[1].y = 93;
+	buttons[1].width = 42;
+	buttons[1].height = 7;
+	buttons[1].text = "cancel";
+	buttons[1].action = cancel_button_cb;
+	buttons[1].color = 0xffffff;
+
+	textbox.x = 30;
+	textbox.y = 57;
+	textbox.width = 340;
+	textbox.height = 16;
+	textbox.focused = 0;
+	memset(textbox.text, 0, sizeof(textbox.text));
+	textbox.capacity = sizeof(textbox.text);
+	textbox.len = 0;
+	textbox.color = 0xffffff;
+	textbox.focused_color = 0xc7ff66;
+
+	status = SAVEAS_STATUS_OK;
 }
 
 extern int
-saveas_show_popup(char *path, size_t max_len)
+saveas_show_popup(const char **path)
 {
 	xcb_generic_event_t *ev;
 
-	textbox.capacity = max_len;
-	textbox.focused = 0;
-	textbox.text = path;
-	textbox.len = 0;
-
-	status = 0;
-
+	reset_state();
 	create_window();
 
 	while (running && (ev = xcb_wait_for_event(conn))) {
@@ -483,6 +508,8 @@ saveas_show_popup(char *path, size_t max_len)
 	}
 
 	destroy_window();
+
+	*path = textbox.text;
 
 	return status;
 }
