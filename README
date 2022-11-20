@@ -1,3 +1,10 @@
 libsaveas is a little library to create a 'save as' popup window for X,
-it's working rn, but it's still in an early stage of development,
-part of the code is a mess, give me some time...
+
+This library depends on libxcb, libxcb-image, libxcb-cursor,
+libxcb-keysyms, libxcb-icccm and libxcb-xkb.
+In order to build this library you need to run `make`.
+
+This program is free software; you can redistribute it
+and/or modify it under the terms of the GNU General Public License
+version 2 as published by the Free Software Foundation.
+See COPYING for more details.
