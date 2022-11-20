@@ -126,22 +126,14 @@ render_text(const char *text, uint32_t color, uint32_t x, uint32_t y,
 	cx = x;
 	cy = y;
 
-	while (*p != '\0') {
-		if (*p == '\n') {
-			cx = x;
-			cy += 10;
-		} else if (*p == '\t') {
-			cx += 7*4;
-		} else {
-			glyph = five_by_seven + *p*7;
-			for (gy = 0; gy < 7; ++gy)
-				for (gx = 0; gx < 5; ++gx)
-					if (glyph[gy] & (1 << (4 - gx)) && cy+gy < HEIGHT && cy+gy-y < area_height
-							&& cx+gx < WIDTH && cx+gx-x < area_width)
-						wpx[(cy+gy)*WIDTH+cx+gx] = color;
-			cx += 7;
-		}
-
+	while (*p != '\0' && *p != '\n') {
+		glyph = five_by_seven + *p*7;
+		for (gy = 0; gy < 7; ++gy)
+			for (gx = 0; gx < 5; ++gx)
+				if (glyph[gy] & (1 << (4 - gx)) && cy+gy < HEIGHT && cy+gy-y < area_height
+						&& cx+gx < WIDTH && cx+gx-x < area_width)
+					wpx[(cy+gy)*WIDTH+cx+gx] = color;
+		cx += 7;
 		++p;
 	}
 }
